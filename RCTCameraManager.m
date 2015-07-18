@@ -254,6 +254,14 @@ RCT_EXPORT_METHOD(stopCapture) {
   }
 }
 
+RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
+  if (state) {
+    [self.session startRunning];
+  } else {
+    [self.session stopRunning];
+  }
+}
+
 - (void)initializeCaptureSessionInput:(NSString *)type {
   dispatch_async(self.sessionQueue, ^{
     NSError *error = nil;
