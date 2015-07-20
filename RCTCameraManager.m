@@ -98,7 +98,7 @@ RCT_EXPORT_VIEW_PROPERTY(torchMode, NSInteger);
   if ((self = [super init])) {
 
     self.session = [AVCaptureSession new];
-    self.session.sessionPreset = AVCaptureSessionPresetHigh;
+    self.session.sessionPreset = AVCaptureSessionPresetPhoto;
 
     self.previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:self.session];
     self.previewLayer.needsDisplayOnBoundsChange = YES;
@@ -204,6 +204,16 @@ RCT_EXPORT_METHOD(changeCamera:(NSInteger)camera) {
 
 RCT_EXPORT_METHOD(changeAspect:(NSString *)aspect) {
   self.previewLayer.videoGravity = aspect;
+}
+
+RCT_EXPORT_METHOD(getCropOrigin:(RCTResponseSenderBlock)callback) {
+  CGPoint origin = CGPointMake(0, 0);
+  CGPoint p = [self.previewLayer captureDevicePointOfInterestForPoint:origin];
+  NSDictionary *inventory = @{
+    @"x" : @(p.x),
+    @"y" : @(p.y),
+  };
+  callback(@[[NSNull null], inventory]);
 }
 
 RCT_EXPORT_METHOD(changeFlashMode:(NSInteger)flashMode) {

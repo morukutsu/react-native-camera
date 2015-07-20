@@ -199,6 +199,10 @@ var Camera = React.createClass({
 
   toggleCamera(state) {
     NativeModules.CameraManager.toggleCamera(state);
+  },
+
+  getCropOrigin(cb) {
+    NativeModules.CameraManager.getCropOrigin(cb);
   }
 });
 
