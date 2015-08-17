@@ -65,6 +65,7 @@
   if ((self = [super init])) {
     self.manager = manager;
     [self.manager initializeCaptureSessionInput:AVMediaTypeVideo];
+    [self.manager startSession];
   }
   return self;
 }
@@ -91,6 +92,7 @@
 
 - (void)removeFromSuperview
 {
+  [self.manager stopSession];
   [super removeFromSuperview];
   [[NSNotificationCenter defaultCenter] removeObserver:self name:UIDeviceOrientationDidChangeNotification object:nil];
 }

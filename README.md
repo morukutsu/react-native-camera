@@ -153,6 +153,21 @@ Will call the specified method when a barcode is detected in the camera's view.
 
 Event contains `data` (the data in the barcode) and `bounds` (the rectangle which outlines the barcode.)
 
+The following barcode types can be recognised:
+
+- `aztec`
+- `code138`
+- `code39`
+- `code39mod43`
+- `code93`
+- `ean13`
+- `ean8`
+- `pdf417`
+- `qr`
+- `upce`
+
+The barcode type is provided in the `data` object.
+
 #### `flashMode`
 
 Values:
@@ -184,6 +199,9 @@ Supported options:
  - `audio` (See `captureAudio` under Properties)
  - `mode` (See  `captureMode` under Properties)
  - `target` (See `captureTarget` under Properties)
+ - `metadata` This is metadata to be added to the captured image.
+   - `location` This is the object returned from `navigator.geolocation.getCurrentPosition()` (React Native's geolocation polyfill). It will add GPS metadata to the image.
+ - `rotation` This will rotate the image by the number of degrees specified.
  
 #### `stopCapture()`
 

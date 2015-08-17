@@ -105,47 +105,6 @@ RCT_EXPORT_VIEW_PROPERTY(torchMode, NSInteger);
 
     self.sessionQueue = dispatch_queue_create("cameraManagerQueue", DISPATCH_QUEUE_SERIAL);
 
-    dispatch_async(self.sessionQueue, ^{
-
-
-      if (self.presetCamera == AVCaptureDevicePositionUnspecified) {
-        self.presetCamera = AVCaptureDevicePositionBack;
-      }
-
-      AVCaptureStillImageOutput *stillImageOutput = [[AVCaptureStillImageOutput alloc] init];
-      if ([self.session canAddOutput:stillImageOutput])
-      {
-        stillImageOutput.outputSettings = @{AVVideoCodecKey : AVVideoCodecJPEG};
-        [self.session addOutput:stillImageOutput];
-        self.stillImageOutput = stillImageOutput;
-      }
-
-      AVCaptureMovieFileOutput *movieFileOutput = [[AVCaptureMovieFileOutput alloc] init];
-      if ([self.session canAddOutput:movieFileOutput])
-      {
-        [self.session addOutput:movieFileOutput];
-        self.movieFileOutput = movieFileOutput;
-      }
-
-      AVCaptureMetadataOutput *metadataOutput = [[AVCaptureMetadataOutput alloc] init];
-      if ([self.session canAddOutput:metadataOutput]) {
-        [metadataOutput setMetadataObjectsDelegate:self queue:self.sessionQueue];
-        [self.session addOutput:metadataOutput];
-        [metadataOutput setMetadataObjectTypes:metadataOutput.availableMetadataObjectTypes];
-        self.metadataOutput = metadataOutput;
-      }
-
-      __weak RCTCameraManager *weakSelf = self;
-      [self setRuntimeErrorHandlingObserver:[NSNotificationCenter.defaultCenter addObserverForName:AVCaptureSessionRuntimeErrorNotification object:self.session queue:nil usingBlock:^(NSNotification *note) {
-        RCTCameraManager *strongSelf = weakSelf;
-        dispatch_async(strongSelf.sessionQueue, ^{
-          // Manually restarting the session since it must have been stopped due to an error.
-          [strongSelf.session startRunning];
-        });
-      }]];
-
-      [self.session startRunning];
-    });
   }
   return self;
 }
@@ -272,10 +231,85 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
   }
 }
 
+- (BOOL)isSimulator {
+  return [[[UIDevice currentDevice].model lowercaseString] rangeOfString:@"simulator"].location != NSNotFound;
+}
+
+- (void)startSession {
+  if ([self isSimulator]) return;
+
+  dispatch_async(self.sessionQueue, ^{
+    if (self.presetCamera == AVCaptureDevicePositionUnspecified) {
+      self.presetCamera = AVCaptureDevicePositionBack;
+    }
+
+    AVCaptureStillImageOutput *stillImageOutput = [[AVCaptureStillImageOutput alloc] init];
+    if ([self.session canAddOutput:stillImageOutput])
+    {
+      stillImageOutput.outputSettings = @{AVVideoCodecKey : AVVideoCodecJPEG};
+      [self.session addOutput:stillImageOutput];
+      self.stillImageOutput = stillImageOutput;
+    }
+
+    AVCaptureMovieFileOutput *movieFileOutput = [[AVCaptureMovieFileOutput alloc] init];
+    if ([self.session canAddOutput:movieFileOutput])
+    {
+      [self.session addOutput:movieFileOutput];
+      self.movieFileOutput = movieFileOutput;
+    }
+
+    AVCaptureMetadataOutput *metadataOutput = [[AVCaptureMetadataOutput alloc] init];
+    if ([self.session canAddOutput:metadataOutput]) {
+      [metadataOutput setMetadataObjectsDelegate:self queue:self.sessionQueue];
+      [self.session addOutput:metadataOutput];
+      [metadataOutput setMetadataObjectTypes:metadataOutput.availableMetadataObjectTypes];
+      self.metadataOutput = metadataOutput;
+    }
+
+    __weak RCTCameraManager *weakSelf = self;
+    [self setRuntimeErrorHandlingObserver:[NSNotificationCenter.defaultCenter addObserverForName:AVCaptureSessionRuntimeErrorNotification object:self.session queue:nil usingBlock:^(NSNotification *note) {
+      RCTCameraManager *strongSelf = weakSelf;
+      dispatch_async(strongSelf.sessionQueue, ^{
+        // Manually restarting the session since it must have been stopped due to an error.
+        [strongSelf.session startRunning];
+      });
+    }]];
+
+    [self.session startRunning];
+  });
+}
+
+- (void)stopSession {
+  if ([self isSimulator]) return;
+
+  dispatch_async(self.sessionQueue, ^{
+    [self.previewLayer removeFromSuperlayer];
+    [self.session stopRunning];
+    for(AVCaptureInput *input in self.session.inputs) {
+      [self.session removeInput:input];
+    }
+
+    for(AVCaptureOutput *output in self.session.outputs) {
+      [self.session removeOutput:output];
+    }
+  });
+}
+
 - (void)initializeCaptureSessionInput:(NSString *)type {
   dispatch_async(self.sessionQueue, ^{
+
+    [self.session beginConfiguration];
+
     NSError *error = nil;
-    AVCaptureDevice *captureDevice = [self deviceWithMediaType:AVMediaTypeVideo preferringPosition:self.presetCamera];
+    AVCaptureDevice *captureDevice;
+
+    if (type == AVMediaTypeAudio) {
+      captureDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
+    }
+    else if (type == AVMediaTypeVideo) {
+      captureDevice = [self deviceWithMediaType:AVMediaTypeVideo preferringPosition:self.presetCamera];
+    }
+
     if (captureDevice == nil) {
       return;
     }
@@ -286,8 +320,6 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
       NSLog(@"%@", error);
       return;
     }
-
-    [self.session beginConfiguration];
 
     if (type == AVMediaTypeAudio) {
       [self.session removeInput:self.audioCaptureDeviceInput];
@@ -315,7 +347,7 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
 
 - (void)captureStill:(NSInteger)target options:(NSDictionary *)options callback:(RCTResponseSenderBlock)callback {
   dispatch_async(self.sessionQueue, ^{
-    if ([[[UIDevice currentDevice].model lowercaseString] rangeOfString:@"simulator"].location != NSNotFound){
+    if ([self isSimulator]){
 
       CGSize size = CGSizeMake(720, 1280);
       UIGraphicsBeginImageContextWithOptions(size, YES, 0);
