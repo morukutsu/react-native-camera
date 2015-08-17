@@ -105,6 +105,7 @@ RCT_EXPORT_VIEW_PROPERTY(torchMode, NSInteger);
 
     self.sessionQueue = dispatch_queue_create("cameraManagerQueue", DISPATCH_QUEUE_SERIAL);
 
+    self.isReady = false;
   }
   return self;
 }
@@ -224,10 +225,12 @@ RCT_EXPORT_METHOD(stopCapture) {
 }
 
 RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
-  if (state) {
-    [self.session startRunning];
-  } else {
-    [self.session stopRunning];
+  if (self.isReady) {
+    if (state) {
+      [self.session startRunning];
+    } else {
+      [self.session stopRunning];
+    }
   }
 }
 
@@ -276,6 +279,7 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
     }]];
 
     [self.session startRunning];
+    self.isReady = true;
   });
 }
 
