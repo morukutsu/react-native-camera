@@ -16,7 +16,11 @@ RCT_EXPORT_MODULE();
 
 - (UIView *)view
 {
-    return [[RCTCamera alloc] initWithManager:self bridge:self.bridge];
+    if(!self.camera){
+        self.camera = [[RCTCamera alloc] initWithManager:self bridge:self.bridge];
+        return self.camera;
+    }
+    return self.camera;
 }
 
 RCT_EXPORT_VIEW_PROPERTY(aspect, NSInteger);
@@ -43,7 +47,8 @@ RCT_EXPORT_VIEW_PROPERTY(torchMode, NSInteger);
                @"code138": AVMetadataObjectTypeCode128Code,
                @"pdf417": AVMetadataObjectTypePDF417Code,
                @"qr": AVMetadataObjectTypeQRCode,
-               @"aztec": AVMetadataObjectTypeAztecCode
+               @"aztec": AVMetadataObjectTypeAztecCode,
+               @"datamatrix": AVMetadataObjectTypeDataMatrixCode
                },
            @"Type": @{
                @"front": @(RCTCameraTypeFront),
@@ -89,20 +94,21 @@ RCT_EXPORT_VIEW_PROPERTY(torchMode, NSInteger);
     AVMetadataObjectTypeCode128Code,
     AVMetadataObjectTypePDF417Code,
     AVMetadataObjectTypeQRCode,
-    AVMetadataObjectTypeAztecCode
+    AVMetadataObjectTypeAztecCode,
+    AVMetadataObjectTypeDataMatrixCode
   ];
 }
 
-RCT_EXPORT_VIEW_PROPERTY(defaultTouchToFocus, BOOL);
+RCT_EXPORT_VIEW_PROPERTY(defaultOnFocusComponent, BOOL);
 RCT_EXPORT_VIEW_PROPERTY(onFocusChanged, BOOL)
 RCT_EXPORT_VIEW_PROPERTY(onZoomChanged, BOOL)
 
-- (NSDictionary *)customDirectEventTypes
+- (NSArray *)customDirectEventTypes
 {
-    return @{
-      @"focusChanged": @{ @"registrationName": @"onFocusChanged" },
-      @"zoomChanged":  @{ @"registrationName": @"onZoomChanged" },
-    };
+    return @[
+      @"focusChanged",
+      @"zoomChanged",
+    ];
 }
 
 - (id)init {
@@ -251,7 +257,9 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
 }
 
 - (void)startSession {
-  if ([self isSimulator]) return;
+#if TARGET_IPHONE_SIMULATOR
+  return;
+#endif
 
   dispatch_async(self.sessionQueue, ^{
     if (self.presetCamera == AVCaptureDevicePositionUnspecified) {
@@ -296,9 +304,12 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
 }
 
 - (void)stopSession {
-  if ([self isSimulator]) return;
+#if TARGET_IPHONE_SIMULATOR
+  return;
+#endif
 
   dispatch_async(self.sessionQueue, ^{
+    self.camera = nil;
     [self.previewLayer removeFromSuperlayer];
     [self.session stopRunning];
     for(AVCaptureInput *input in self.session.inputs) {
@@ -363,8 +374,7 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
 
 - (void)captureStill:(NSInteger)target options:(NSDictionary *)options callback:(RCTResponseSenderBlock)callback {
   dispatch_async(self.sessionQueue, ^{
-    if ([self isSimulator]){
-
+#if TARGET_IPHONE_SIMULATOR
       CGSize size = CGSizeMake(720, 1280);
       UIGraphicsBeginImageContextWithOptions(size, YES, 0);
         [[UIColor whiteColor] setFill];
@@ -374,9 +384,7 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
 
       NSData *imageData = UIImageJPEGRepresentation(image, 1.0);
       [self saveImage:imageData target:target metadata:nil callback:callback];
-
-    } else {
-
+#else
       [[self.stillImageOutput connectionWithMediaType:AVMediaTypeVideo] setVideoOrientation:self.previewLayer.connection.videoOrientation];
 
       [self.stillImageOutput captureStillImageAsynchronouslyFromConnection:[self.stillImageOutput connectionWithMediaType:AVMediaTypeVideo] completionHandler:^(CMSampleBufferRef imageDataSampleBuffer, NSError *error) {
@@ -440,7 +448,7 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
           callback(@[RCTMakeError(error.description, nil, nil)]);
         }
       }];
-    }
+#endif
   });
 }
 

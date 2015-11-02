@@ -1,14 +1,7 @@
-var React = require('React');
-var DeviceEventEmitter = require('RCTDeviceEventEmitter');
-var NativeModules = require('NativeModules');
-var ReactNativeViewAttributes = require('ReactNativeViewAttributes');
-var StyleSheet = require('StyleSheet');
-var createReactNativeComponentClass = require('createReactNativeComponentClass');
-var PropTypes = require('ReactPropTypes');
-var StyleSheetPropType = require('StyleSheetPropType');
-var NativeMethodsMixin = require('NativeMethodsMixin');
-var flattenStyle = require('flattenStyle');
-var merge = require('merge');
+var React = require('react-native');
+var { StyleSheet, requireNativeComponent, PropTypes, NativeModules, DeviceEventEmitter } = React;
+
+var CAMERA_REF = 'camera';
 
 var constants = {
   Aspect: NativeModules.CameraManager.Aspect,
@@ -52,16 +45,13 @@ var Camera = React.createClass({
       PropTypes.string,
       PropTypes.number
     ]),
-    defaultTouchToFocus: PropTypes.bool,
+    defaultOnFocusComponent: PropTypes.bool,
     onFocusChanged: PropTypes.func,
     onZoomChanged: PropTypes.func
   },
 
-  mixins: [NativeMethodsMixin],
-
-  viewConfig: {
-    uiViewClassName: 'UIView',
-    validAttributes: ReactNativeViewAttributes.UIView
+  setNativeProps(props) {
+    this.refs[CAMERA_REF].setNativeProps(props);
   },
 
   getDefaultProps() {
@@ -96,12 +86,12 @@ var Camera = React.createClass({
     this.cameraBarCodeReadListener.remove();
 
     if (this.state.isRecording) {
-      this.stopRecording();
+      this.stopCapture();
     }
   },
 
   render() {
-    var style = flattenStyle([styles.base, this.props.style]);
+    var style = [styles.base, this.props.style];
 
     var aspect = this.props.aspect,
         type = this.props.type,
@@ -147,7 +137,7 @@ var Camera = React.createClass({
       type = constants.Type[type];
     }
 
-    var nativeProps = merge(this.props, {
+    var nativeProps = Object.assign({}, this.props, {
       style,
       aspect: aspect,
       type: type,
@@ -156,7 +146,7 @@ var Camera = React.createClass({
       torchMode: torchMode
     });
 
-    return <RCTCamera {... nativeProps} />
+    return <RCTCamera ref={CAMERA_REF} {... nativeProps} />;
   },
 
   _onBarCodeRead(e) {
@@ -209,19 +199,7 @@ var Camera = React.createClass({
   }
 });
 
-var RCTCamera = createReactNativeComponentClass({
-  validAttributes: merge(ReactNativeViewAttributes.UIView, {
-    aspect: true,
-    type: true,
-    orientation: true,
-    flashMode: true,
-    torchMode: true,
-    onFocusChanged: true,
-    onZoomChanged: true,
-    defaultTouchToFocus: true
-  }),
-  uiViewClassName: 'RCTCamera',
-});
+var RCTCamera = requireNativeComponent('RCTCamera', Camera);
 
 var styles = StyleSheet.create({
   base: { },
