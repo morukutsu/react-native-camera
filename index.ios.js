@@ -190,6 +190,10 @@ var Camera = React.createClass({
     }
   },
 
+  hasFlash(callback) {
+      NativeModules.CameraManager.hasFlash(callback);
+  },
+
   toggleCamera(state) {
     NativeModules.CameraManager.toggleCamera(state);
   },

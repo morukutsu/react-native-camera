@@ -65,6 +65,7 @@ RCT_EXPORT_VIEW_PROPERTY(torchMode, NSInteger);
            @"CaptureTarget": @{
                @"memory": @(RCTCameraCaptureTargetMemory),
                @"disk": @(RCTCameraCaptureTargetDisk),
+               @"temp": @(RCTCameraCaptureTargetTemp),
                @"cameraRoll": @(RCTCameraCaptureTargetCameraRoll)
                },
            @"Orientation": @{
@@ -270,11 +271,47 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
   return [[[UIDevice currentDevice].model lowercaseString] rangeOfString:@"simulator"].location != NSNotFound;
 }
 
+RCT_EXPORT_METHOD(getFOV: (RCTResponseSenderBlock)callback) {
+  NSArray *devices = [AVCaptureDevice devices];
+  AVCaptureDevice *frontCamera;
+  AVCaptureDevice *backCamera;
+  double frontFov = 0.0;
+  double backFov = 0.0;
+
+  for (AVCaptureDevice *device in devices) {
+
+      NSLog(@"Device name: %@", [device localizedName]);
+
+      if ([device hasMediaType:AVMediaTypeVideo]) {
+
+          if ([device position] == AVCaptureDevicePositionBack) {
+              NSLog(@"Device position : back");
+              backCamera = device;
+              backFov = backCamera.activeFormat.videoFieldOfView;
+          }
+          else {
+              NSLog(@"Device position : front");
+              frontCamera = device;
+              frontFov = frontCamera.activeFormat.videoFieldOfView;
+          }
+      }
+  }
+
+  callback(@[[NSNull null], @{
+    [NSNumber numberWithInt:RCTCameraTypeBack]: [NSNumber numberWithDouble: backFov],
+    [NSNumber numberWithInt:RCTCameraTypeFront]: [NSNumber numberWithDouble: frontFov]
+  }]);
+}
+
+RCT_EXPORT_METHOD(hasFlash:(RCTResponseSenderBlock) callback) {
+    AVCaptureDevice *device = [self.videoCaptureDeviceInput device];
+    callback(@[@(device.hasFlash)]);
+}
+
 - (void)startSession {
 #if TARGET_IPHONE_SIMULATOR
   return;
 #endif
-
   dispatch_async(self.sessionQueue, ^{
     if (self.presetCamera == AVCaptureDevicePositionUnspecified) {
       self.presetCamera = AVCaptureDevicePositionBack;
@@ -321,7 +358,6 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
 #if TARGET_IPHONE_SIMULATOR
   return;
 #endif
-
   dispatch_async(self.sessionQueue, ^{
     [self.previewLayer removeFromSuperlayer];
     [self.session stopRunning];
@@ -390,9 +426,24 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
 #if TARGET_IPHONE_SIMULATOR
       CGSize size = CGSizeMake(720, 1280);
       UIGraphicsBeginImageContextWithOptions(size, YES, 0);
-        [[UIColor whiteColor] setFill];
-        UIRectFill(CGRectMake(0, 0, size.width, size.height));
-        UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+          // Thanks https://gist.github.com/kylefox/1689973
+          CGFloat hue = ( arc4random() % 256 / 256.0 );  //  0.0 to 1.0
+          CGFloat saturation = ( arc4random() % 128 / 256.0 ) + 0.5;  //  0.5 to 1.0, away from white
+          CGFloat brightness = ( arc4random() % 128 / 256.0 ) + 0.5;  //  0.5 to 1.0, away from black
+          UIColor *color = [UIColor colorWithHue:hue saturation:saturation brightness:brightness alpha:1];
+          [color setFill];
+          UIRectFill(CGRectMake(0, 0, size.width, size.height));
+          NSDate *currentDate = [NSDate date];
+          NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+          [dateFormatter setDateFormat:@"dd.MM.YY HH:mm:ss"];
+          NSString *text = [dateFormatter stringFromDate:currentDate];
+          UIFont *font = [UIFont systemFontOfSize:40.0];
+          NSDictionary *attributes = [NSDictionary dictionaryWithObjects:
+                                      @[font, [UIColor blackColor]]
+                                                                 forKeys:
+                                      @[NSFontAttributeName, NSForegroundColorAttributeName]];
+          [text drawAtPoint:CGPointMake(size.width/3, size.height/2) withAttributes:attributes];
+          UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
       UIGraphicsEndImageContext();
 
       NSData *imageData = UIImageJPEGRepresentation(image, 1.0);
@@ -481,6 +532,14 @@ RCT_EXPORT_METHOD(toggleCamera:(BOOL)state) {
     NSString *fullPath = [[documentsDirectory stringByAppendingPathComponent:[[NSUUID UUID] UUIDString]] stringByAppendingPathExtension:@"jpg"];
 
     [fileManager createFileAtPath:fullPath contents:imageData attributes:nil];
+    responseString = fullPath;
+  }
+
+  else if (target == RCTCameraCaptureTargetTemp) {
+    NSString *fileName = [[NSProcessInfo processInfo] globallyUniqueString];
+    NSString *fullPath = [NSString stringWithFormat:@"%@%@.jpg", NSTemporaryDirectory(), fileName];
+
+    [imageData writeToFile:fullPath atomically:YES];
     responseString = fullPath;
   }
 
@@ -613,6 +672,20 @@ didFinishRecordingToOutputFileAtURL:(NSURL *)outputFileURL
     if (!([fileManager copyItemAtPath:[outputFileURL path] toPath:fullPath error:&error])) {
       self.videoCallback(@[RCTMakeError(error.description, nil, nil)]);
       return;
+    }
+    self.videoCallback(@[[NSNull null], fullPath]);
+  }
+  else if (self.videoTarget == RCTCameraCaptureTargetTemp) {
+    NSString *fileName = [[NSProcessInfo processInfo] globallyUniqueString];
+    NSString *fullPath = [NSString stringWithFormat:@"%@%@.mov", NSTemporaryDirectory(), fileName];
+
+    NSFileManager * fileManager = [NSFileManager defaultManager];
+    NSError * error = nil;
+
+    //copying destination
+    if (!([fileManager copyItemAtPath:[outputFileURL path] toPath:fullPath error:&error])) {
+        self.videoCallback(@[RCTMakeError(error.description, nil, nil)]);
+        return;
     }
     self.videoCallback(@[[NSNull null], fullPath]);
   }
